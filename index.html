@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Physics Sandbox</title>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+        <style>* { margin: 0; padding: 0; } body { display: flex; background: #1a1a1a; color: white; font-family: Arial; } #sidebar { width: 200px; padding: 10px; background: #2a2a2a; } button { display: list-item; width: 100%; margin: 5px 0; padding: 5px; background: #3a3a3a; color: white; cursor: pointer; visibility: visible; vertical-align: sub; resize: vertical; border-radius: 0px; border-top: 0px none; border-right: 0px none; border-bottom: 0px none; border-width: 0px; border-left: 0px none; } button:hover { background: #4a4a4a; } input { width: 100%; margin: 5px 0; padding: 5px; background: #3a3a3a; border: none; color: white; } #canvas-container { flex-grow: 1; }</style>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+        <link rel="stylesheet" href="materialize/css/materialize.min.css">
+    </head>
+    <body>
+        <div id="sidebar">
+            <button id="addCircle">Add Circle</button>
+            <button id="addTriangle">Add Triangle</button>
+            <button id="addPendulum">Add Pendulum</button>
+            <button id="addSlingshot">Add Slingshot</button>
+            <button id="toggleWireframes">Toggle Wireframes</button>
+            <button id="clearAll">Clear All</button>
+            <button id="pause">Pause</button>
+            <div>
+                <label>Gravity X:</label>
+                <input type="range" id="gravityX" min="-1" max="1" step="0.1" value="0">
+            </div>
+            <div>
+                <label>Gravity Y:</label>
+                <input type="range" id="gravityY" min="-1" max="1" step="0.1" value="1">
+            </div>
+            <div>
+                <label>Size:</label>
+                <input type="number" id="size" value="30" min="5" max="100">
+            </div>
+            <input type="color" id="color" value="#ffffff">
+        </div>
+        <div id="canvas-container"></div>
+        <script>
+        // Initialize Matter.js modules
+        const Engine = Matter.Engine,
+              Render = Matter.Render,
+              Runner = Matter.Runner,
+              Bodies = Matter.Bodies,
+              Composite = Matter.Composite,
+              Mouse = Matter.Mouse,
+              MouseConstraint = Matter.MouseConstraint,
+              Constraint = Matter.Constraint;
+
+        // Create engine
+        const engine = Engine.create();
+        const world = engine.world;
+
+        // Create renderer
+        const render = Render.create({
+            element: document.getElementById('canvas-container'),
+            engine: engine,
+            options: {
+                width: window.innerWidth - 200,
+                height: window.innerHeight,
+                wireframes: false,
+                background: '#111'
+            }
+        });
+
+        // Create runner
+        const runner = Runner.create();
+
+        // Add mouse control
+        const mouse = Mouse.create(render.canvas);
+        const mouseConstraint = MouseConstraint.create(engine, {
+            mouse: mouse,
+            constraint: {
+                stiffness: 0.2,
+                render: { visible: false }
+            }
+        });
+
+        Composite.add(world, mouseConstraint);
+        render.mouse = mouse;
+
+        // Start the engine and renderer
+        Runner.run(runner, engine);
+        Render.run(render);
+
+        // UI Controls
+        document.getElementById('addCircle').onclick = () => {
+            const circle = Bodies.circle(
+                mouse.position.x,
+                mouse.position.y,
+                document.getElementById('size').value,
+                {
+                    render: {
+                        fillStyle: document.getElementById('color').value
+                    }
+                }
+            );
+            Composite.add(world, circle);
+        };
+
+        document.getElementById('addTriangle').onclick = () => {
+            const triangle = Bodies.polygon(
+                mouse.position.x,
+                mouse.position.y,
+                3,
+                document.getElementById('size').value,
+                {
+                    render: {
+                        fillStyle: document.getElementById('color').value
+                    }
+                }
+            );
+            Composite.add(world, triangle);
+        };
+
+        document.getElementById('addPendulum').onclick = () => {
+            const size = parseInt(document.getElementById('size').value);
+            const pendulumBob = Bodies.circle(
+                mouse.position.x,
+                mouse.position.y + 100,
+                size,
+                {
+                    render: {
+                        fillStyle: document.getElementById('color').value
+                    }
+                }
+            );
+
+            const anchor = Bodies.circle(
+                mouse.position.x,
+                mouse.position.y,
+                10,
+                {
+                    isStatic: true,
+                    render: { fillStyle: '#666' }
+                }
+            );
+
+            const constraint = Constraint.create({
+                bodyA: anchor,
+                bodyB: pendulumBob,
+                length: 100,
+                stiffness: 0.9
+            });
+
+            Composite.add(world, [pendulumBob, anchor, constraint]);
+        };
+
+        document.getElementById('addSlingshot').onclick = () => {
+            const size = parseInt(document.getElementById('size').value);
+            const projectile = Bodies.circle(
+                mouse.position.x + 50,
+                mouse.position.y,
+                size,
+                {
+                    render: {
+                        fillStyle: document.getElementById('color').value
+                    }
+                }
+            );
+
+            const anchor = Bodies.circle(
+                mouse.position.x,
+                mouse.position.y,
+                10,
+                {
+                    isStatic: true,
+                    render: { fillStyle: '#666' }
+                }
+            );
+
+            const elastic = Constraint.create({
+                bodyA: anchor,
+                bodyB: projectile,
+                stiffness: 0.05,
+                damping: 0.001
+            });
+
+            Composite.add(world, [projectile, anchor, elastic]);
+        };
+
+        document.getElementById('toggleWireframes').onclick = () => {
+            render.options.wireframes = !render.options.wireframes;
+        };
+
+        document.getElementById('clearAll').onclick = () => {
+            Composite.clear(world, false, true);
+        };
+
+        let paused = false;
+        document.getElementById('pause').onclick = () => {
+            paused = !paused;
+            if (paused) {
+                runner.enabled = false;
+            } else {
+                runner.enabled = true;
+            }
+        };
+
+        // Gravity controls
+        document.getElementById('gravityX').oninput = (e) => {
+            engine.world.gravity.x = parseFloat(e.target.value);
+        };
+
+        document.getElementById('gravityY').oninput = (e) => {
+            engine.world.gravity.y = parseFloat(e.target.value);
+        };
+
+        // Add walls
+        const walls = [
+            Bodies.rectangle(render.canvas.width/2, -10, render.canvas.width, 20, { isStatic: true }),
+            Bodies.rectangle(render.canvas.width/2, render.canvas.height + 10, render.canvas.width, 20, { isStatic: true }),
+            Bodies.rectangle(-10, render.canvas.height/2, 20, render.canvas.height, { isStatic: true }),
+            Bodies.rectangle(render.canvas.width + 10, render.canvas.height/2, 20, render.canvas.height, { isStatic: true })
+        ];
+        Composite.add(world, walls);
+
+        // Resize handling
+        window.onresize = () => {
+            render.canvas.width = window.innerWidth - 200;
+            render.canvas.height = window.innerHeight;
+        };
+    </script>
+        <script src="materialize/js/materialize.min.js"></script>
+    </body>
+</html>
